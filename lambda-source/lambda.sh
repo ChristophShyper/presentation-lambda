@@ -36,8 +36,9 @@ function package_host_part() {
         --user $(id -u):$(id -g) \
         --volume /${DOCKER_DIR}:${CONT_MOUNT_DIR} \
         --workdir ${CONT_MOUNT_DIR} \
-        lambci/lambda:build-python3.7 ./lambda.sh package ${FUNCTION_NAME} ${S3_BUCKET} ${S3_KEY}
+        lambci/lambda:build-${RUNTIME} ./lambda.sh package ${FUNCTION_NAME} ${S3_BUCKET} ${S3_KEY}
 
+#    copy_ownership ${HOST_SOURCE_DIR} ${HOST_WORKING_DIR}
     if [[ ${S3_BUCKET} != "" && ${S3_KEY} != "" ]]; then
         echo "===>   Uploading to: s3://${S3_BUCKET}/${S3_KEY}"
         FILEBASE64SHA256=`openssl dgst -sha256 -binary ${HOST_WORKING_DIR}/${FUNCTION_NAME}.zip | openssl base64`
@@ -45,8 +46,6 @@ function package_host_part() {
         aws s3 cp ${HOST_WORKING_DIR}/${FUNCTION_NAME}.zip s3://${S3_BUCKET}/${S3_KEY}
         aws s3api put-object-tagging --bucket ${S3_BUCKET} --key ${S3_KEY} --tagging ${TAG_SET}
     fi
-
-    copy_ownership ${HOST_SOURCE_DIR} ${HOST_WORKING_DIR}
     echo "===>   Finished preparing Lambda: ${FUNCTION_NAME}"
 }
 
@@ -78,25 +77,27 @@ function run_host_part() {
         --user $(id -u):$(id -g) \
         --volume /${DOCKER_DIR}:${CONT_MOUNT_DIR} \
         --workdir ${CONT_MOUNT_DIR} \
-        lambci/lambda:build-python3.7 ./lambda.sh run ${FUNCTION_NAME} ${EVENT}
+        lambci/lambda:${RUNTIME} index.handler ${EVENT}
 
     echo "===>   Finished running Lambda: ${FUNCTION_NAME}"
 }
 
-function run_container_part() {
-    # install requirements and copy files from source/ dir
-    mkdir -p ${CONT_WORKING_DIR}
-    cd ${CONT_WORKING_DIR}
-    echo "===>   Unzipping package"
-    unzip -o ${CONT_MOUNT_DIR}/${FUNCTION_NAME}.zip -d ${CONT_WORKING_DIR}/
-    echo "===>   Running function"
-    python ${CONT_WORKING_DIR}/index.py ${EVENT}
-}
+#function run_container_part() {
+#    # install requirements and copy files from source/ dir
+#    mkdir -p ${CONT_WORKING_DIR}
+#    cd ${CONT_WORKING_DIR}
+#    echo "===>   Unzipping package"
+#    unzip -o ${CONT_MOUNT_DIR}/${FUNCTION_NAME}.zip -d ${CONT_WORKING_DIR}/
+#    echo "===>   Running function"
+#    python ${CONT_WORKING_DIR}/index.py ${EVENT}
+#}
 
-# parameters
+# common parameters
 ACTION=$1
 FUNCTION_NAME=$2
+# parameters for running
 EVENT=$3
+# parameters for deployment
 S3_BUCKET=$3
 S3_KEY=$4
 
@@ -106,6 +107,14 @@ CONT_MOUNT_DIR=/tmp/install
 HOST_SOURCE_DIR=$(dirname "$(readlink -f "$0")")
 HOST_WORKING_DIR=${HOST_SOURCE_DIR}/.dist
 
+grep -qE "(Microsoft|WSL)" /proc/version
+if [[ $? == 0 ]]; then
+    MOUNT_DIR=`df | grep 'C:' | awk '{print $6}' | sed 's|\/|\\/|g'`
+	DOCKER_DIR=`pwd | sed 's|$(MOUNT_DIR)|C:|'`
+else
+    DOCKER_DIR=`pwd`
+fi
+
 if [[ ${ACTION} == "package" ]]; then
     if [[ ${PWD} == ${CONT_MOUNT_DIR} ]]; then
         package_container_part
@@ -113,9 +122,7 @@ if [[ ${ACTION} == "package" ]]; then
         package_host_part
     fi
 else
-    if [[ ${PWD} == ${CONT_MOUNT_DIR} ]]; then
-        run_container_part
-    else
+    if [[ ${PWD} != ${CONT_MOUNT_DIR} ]]; then
         run_host_part
     fi
 fi

@@ -1,19 +1,24 @@
 locals {
+  aws_profile       = "demo"
   aws_region    = "eu-west-1"
+  env_some_var = "RECEIVED:"
   function_dir  = "lambda-source"
   function_name = "example"
   memory_size   = 128
-  profile       = "demo"
   runtime       = "python3.7"
   s3_bucket     = "ksz-demo-example"
-  s3_key        = "demo.zip"
+  s3_key        = "lambda-demo.zip"
   timeout       = 3
+}
+
+terraform {
+  required_version = "~> 0.12"
 }
 
 provider "aws" {
   region                  = local.aws_region
   shared_credentials_file = "$HOME/.aws/credentials"
-  profile                 = local.profile
+  profile                 = local.aws_profile
 }
 
 # get account id
@@ -55,15 +60,21 @@ data "aws_iam_policy_document" "demo" {
     ]
     effect = "Allow"
     resources = [
-      "arn:aws:logs:${data.aws_region.default.name}:${data.aws_caller_identity.default.account_id}:log-group:${local.function_name}:*"
+      "arn:aws:logs:${data.aws_region.default.name}:${data.aws_caller_identity.default.account_id}:log-group:/aws/lambda/${local.function_name}:*"
     ]
   }
 }
 
-data "archive_file" "demo" {
-  type        = "zip"
-  source_file = "${path.module}/../${local.function_dir}/index.py"
-  output_path = "${path.module}/../${local.function_dir}/.dist/demo.zip"
+# creates deployment package for lambda
+resource "null_resource" "package" {
+  triggers = {
+    files_hash = base64sha256(join("", [for source_file in fileset(local.function_dir, "*") : filesha256("${local.function_dir}/${source_file}")]))
+  }
+
+  provisioner "local-exec" {
+    command     = "./setup.sh ${local.function_dir} ${local.docker_dir} ${local.s3_bucket} ${local.s3_key}"
+    working_dir = "${local.tg_dir}/lambdas/${local.alarms_forward_dir}"
+  }
 }
 
 resource "aws_s3_bucket" "demo" {
@@ -73,7 +84,7 @@ resource "aws_s3_bucket" "demo" {
 
 resource "aws_iam_role" "demo" {
   assume_role_policy = data.aws_iam_policy_document.assume_role.json
-  description        = "Policy for ${local.function_name} Lambda"
+  description        = "Role for ${local.function_name} Lambda"
   name               = "${local.function_name}-role"
 }
 
