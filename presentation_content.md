@@ -1,4 +1,7 @@
 # Understanding AWS Lambda
+
+---
+# What is AWS Lambda
 * Started November 2014
 * Event-driven serverless high-availability computing platform
 * For small and quick stateless applications (FaaS)
@@ -91,6 +94,7 @@ _(https://docs.aws.amazon.com/lambda/latest/dg/lambda-environment-variables.html
 ---
 # Runtime caveats
 * Cold-start vs warm-start (timeout unknown)
+* Used memory (last max for current lifetime)
 * Handler vs global scope
 * Limits and costs (GB-sec)
 * Limits and performance (lower can be faster) 
@@ -102,7 +106,7 @@ _(https://docs.aws.amazon.com/lambda/latest/dg/lambda-environment-variables.html
     * May require SQS dead letter queue to assure all failed events are stored
     * Will block new events from DynamoDB or Kinesis (up to 7 days)
     * Will return event to SQS (up to 12 hours)
-* Using VPC-enabled may use up all ENIs
+* Using VPC-enabled may use up all ENIs (160)
 
 _(https://aws.amazon.com/lambda/pricing/)_
 _(https://docs.aws.amazon.com/lambda/latest/dg/runtime-support-policy.html)_
@@ -115,10 +119,13 @@ _(https://docs.aws.amazon.com/lambda/latest/dg/retries-on-errors.html)_
 * X-Ray - additional costs may apply over free tier
 * Own logging - sync, possible timeouts
 * Another Lambda to forward CloudWatch logs to ELK, etc. - another layer of logging, many executions, may fail 
+* Console metrics // TODO: screeenshot
 
 ---
 # Good practices and tricks
 
+* Start small and grow
+* Try SAM for Lambda lifecycle (now supports CI/CD)
 * Use environment variables for values that can change - for ease of adjustment without redeployment
 * Reuse context, global scope, and /tmp whenever possible, but only if you're certain how and why - for execution speed-up
 * Add only necessary files and dependencies to deployment package - for startup speed-up

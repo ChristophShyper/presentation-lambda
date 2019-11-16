@@ -3,3 +3,4 @@
 /lambda-source/.dist
 /lambda-infra/terraform.tfstate*
 /lambda-infra/.terraform
+/~$Presentation.pptx
