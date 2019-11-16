@@ -1,18 +1,22 @@
 locals {
   aws_profile       = "demo"
   aws_region    = "eu-west-1"
-  env_some_var = "RECEIVED:"
+  env_some_var = "Value for my variable"
   function_dir  = "lambda-source"
+  function_memory_limit   = 128
   function_name = "example"
-  memory_size   = 128
-  runtime       = "python3.7"
-  s3_bucket     = "ksz-demo-example"
-  s3_key        = "lambda-demo.zip"
-  timeout       = 3
+  function_runtime       = "python3.7"
+  function_timeout       = 3
+  s3_bucket     = "ksz-demo-${local.function_name}"
+  s3_key        = "lambda-${local.function_name}.zip"
 }
 
 terraform {
   required_version = "~> 0.12"
+  required_providers {
+    aws = "~> 2.33"
+    null = "~> 2.1"
+  }
 }
 
 provider "aws" {
@@ -29,6 +33,16 @@ data "aws_region" "default" {
   name = local.aws_region
 }
 
+# get properties of package on s3
+# for obvious reasons package must be created beforehand
+data "aws_s3_bucket_object" "package" {
+  bucket = local.s3_bucket
+  key    = local.s3_key
+
+  depends_on = [null_resource.package]
+}
+
+# set content of assume role policy for lambda
 data "aws_iam_policy_document" "assume_role" {
   policy_id = "lambda-assume-role"
 
@@ -44,10 +58,11 @@ data "aws_iam_policy_document" "assume_role" {
   }
 }
 
+# set content of policy that will be attached to lambda role
 data "aws_iam_policy_document" "demo" {
   policy_id = "lambda-function-policy"
 
-  # write log group for lambda
+  # allow writing logs in cloudwatch
   statement {
     sid = "CloudWatchLogs"
     actions = [
@@ -66,54 +81,62 @@ data "aws_iam_policy_document" "demo" {
 }
 
 # creates deployment package for lambda
+# will be triggered anytime files in lambda-source directory change
+# for obious reasons bucket exists beforehand
 resource "null_resource" "package" {
   triggers = {
-    files_hash = base64sha256(join("", [for source_file in fileset(local.function_dir, "*") : filesha256("${local.function_dir}/${source_file}")]))
+    files_hash = base64sha256(join("", [for source_file in fileset("../${local.function_dir}", "*") : filesha256("../${local.function_dir}/${source_file}")]))
   }
 
   provisioner "local-exec" {
-    command     = "./setup.sh ${local.function_dir} ${local.docker_dir} ${local.s3_bucket} ${local.s3_key}"
-    working_dir = "${local.tg_dir}/lambdas/${local.alarms_forward_dir}"
+    command     = "./lambda.sh deploy ${local.function_name} ${local.function_runtime} ${local.aws_profile} ${local.s3_bucket} ${local.s3_key}"
+    working_dir = "../${local.function_dir}"
   }
 }
 
+# bucket where package will be placed
 resource "aws_s3_bucket" "demo" {
   acl    = "private"
   bucket = local.s3_bucket
 }
 
+# role used by lambda
 resource "aws_iam_role" "demo" {
   assume_role_policy = data.aws_iam_policy_document.assume_role.json
   description        = "Role for ${local.function_name} Lambda"
   name               = "${local.function_name}-role"
 }
 
+# attach policy to the role
 resource "aws_iam_role_policy" "demo" {
+  name = "${local.function_name}-policy"
   policy = data.aws_iam_policy_document.demo.json
   role   = aws_iam_role.demo.id
 }
 
-resource "aws_s3_bucket_object" "demo" {
-  bucket = aws_s3_bucket.demo.id
-  key    = local.s3_key
-  source = data.archive_file.demo.output_path
-}
-
+# main function
+# update will be trigger only when filebase64sha256 tag on package object changes
+# for obvious reasons role and package must exist beforehand
 resource "aws_lambda_function" "demo" {
   description      = "Lambda example demo"
   function_name    = local.function_name
   handler          = "index.handler"
-  memory_size      = local.memory_size
+  memory_size      = local.function_memory_limit
   role             = aws_iam_role.demo.arn
-  runtime          = local.runtime
+  runtime          = local.function_runtime
   s3_bucket        = aws_s3_bucket.demo.id
   s3_key           = local.s3_key
-  source_code_hash = data.archive_file.demo.output_base64sha256
-  timeout          = local.timeout
+  source_code_hash = data.aws_s3_bucket_object.package.tags.filebase64sha256
+  timeout          = local.function_timeout
 
   environment {
     variables = {
-      SOME_VAR = local.function_name
+      SOME_VAR = local.env_some_var
     }
   }
+
+  depends_on = [
+    aws_iam_role.demo,
+    null_resource.package,
+  ]
 }
