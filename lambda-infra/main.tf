@@ -1,20 +1,20 @@
 locals {
-  aws_profile       = "demo"
-  aws_region    = "eu-west-1"
-  env_some_var = "Value for my variable"
-  function_dir  = "lambda-source"
-  function_memory_limit   = 128
-  function_name = "example"
-  function_runtime       = "python3.7"
-  function_timeout       = 3
-  s3_bucket     = "ksz-demo-${local.function_name}"
-  s3_key        = "lambda-${local.function_name}.zip"
+  aws_profile           = "demo"
+  aws_region            = "eu-west-1"
+  env_some_var          = "Value for my variable"
+  function_dir          = "lambda-source"
+  function_memory_limit = 128
+  function_name         = "example"
+  function_runtime      = "python3.7"
+  function_timeout      = 3
+  s3_bucket             = "ksz-demo-${local.function_name}"
+  s3_key                = "lambda-${local.function_name}.zip"
 }
 
 terraform {
   required_version = "~> 0.12"
   required_providers {
-    aws = "~> 2.33"
+    aws  = "~> 2.33"
     null = "~> 2.1"
   }
 }
@@ -109,7 +109,7 @@ resource "aws_iam_role" "demo" {
 
 # attach policy to the role
 resource "aws_iam_role_policy" "demo" {
-  name = "${local.function_name}-policy"
+  name   = "${local.function_name}-policy"
   policy = data.aws_iam_policy_document.demo.json
   role   = aws_iam_role.demo.id
 }
