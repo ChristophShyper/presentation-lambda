@@ -9,6 +9,7 @@
 
 # changes back files ownership after they were created by root in docker container
 # root is needed to install dependencies
+# running without it in some automation tools will fail
 function copy_ownership() {
     SOURCE=$1
     TARGET=$2
@@ -82,16 +83,6 @@ function run_host_part() {
 
     echo "===>   Finished running Lambda: ${FUNCTION_NAME}"
 }
-
-#function run_container_part() {
-#    # install requirements and copy files from source/ dir
-#    mkdir -p ${CONT_WORKING_DIR}
-#    cd ${CONT_WORKING_DIR}
-#    echo "===>   Unzipping package"
-#    unzip -o ${CONT_MOUNT_DIR}/${FUNCTION_NAME}.zip -d ${CONT_WORKING_DIR}/
-#    echo "===>   Running function"
-#    python ${CONT_WORKING_DIR}/index.py ${EVENT}
-#}
 
 # common parameters
 ACTION=$1
