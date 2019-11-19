@@ -92,6 +92,7 @@ resource "null_resource" "package" {
     command     = "./lambda.sh deploy ${local.function_name} ${local.function_runtime} ${local.aws_profile} ${local.s3_bucket} ${local.s3_key}"
     working_dir = "../${local.function_dir}"
   }
+  depends_on = [aws_s3_bucket.demo]
 }
 
 # bucket where package will be placed
