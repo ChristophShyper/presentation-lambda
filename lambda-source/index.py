@@ -7,7 +7,7 @@ def handler(event, context):
     print("Welcome to AWS Lambda")
     print("Var: {}".format(some_var))
     print("Event: {}".format(event))
-    # return event to force update
+    # return event
 
 
 if __name__ == '__main__':
